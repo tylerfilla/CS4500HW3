@@ -125,7 +125,8 @@ type
      * to produce a TSeriesResults record containing the final statistics.
      *}
     TSeriesResults = record
-        // pass
+        // Copies of the source game results.
+        games: array of TGameResults;
     end;
 
     {*
@@ -401,7 +402,9 @@ begin
     IsBoardStrong := true;
 end;
 
-// Play a single game on the given board
+{*
+ * Play a single game on the given board. Returns the gameplay results.
+ *}
 function PlayGame(board: TBoard): TGameResults;
 var    
     // The game results.
@@ -417,6 +420,9 @@ var
     tempNumArrows: integer;
 
 begin
+    // Copy the board through
+    results.board := board;
+
     OutLn('Gameplay is about to begin.');
 
     // Start at first circle
@@ -467,20 +473,48 @@ begin
     PlayGame := results;
 end;
 
-// Crunch the numbers for the given games and compute series results
+{*
+ * Crunch the numbers on the given per-game results to get the series results.
+ * This function performs statistics, such as averaging, over all the games.
+ *}
 function ComputeResults(constref games: array of TGameResults): TSeriesResults;
 var
     // The series results.
     results: TSeriesResults;
 
+    // An iterator index.
+    i: integer;
+
 begin
+    // Copy game results through
+    SetLength(results.games, Length(games));
+    for i := 1 to Length(games) do
+    begin
+        results.games[i - 1] := games[i - 1];
+    end;
+
     // Return series results
     ComputeResults := results;
 end;
 
 procedure DisplaySeriesResults(constref results: TSeriesResults);
+var
+    // An iterator index.
+    i: integer;
+
 begin
-    WriteLn('Placeholder for series results');
+    OutLn(Format('Tabulating results for %d games...', [Length(results.games)]));
+
+    // Table header
+    OutLn('+--------+----+----+----------------------------------------+');
+    OutLn('| Game # | N  | K  |                                        |');
+    OutLn('+--------+----+----+----------------------------------------+');
+
+    for i := 1 to C_NUM_GAMES do
+    begin
+        OutLn(Format('| %6d | %2d | %2d |                                        |', [i, results.games[i - 1].board.numCircles, results.games[i - 1].board.numArrows]));
+        OutLn('+--------+----+----+----------------------------------------+');
+    end;
 end;
 
 var
@@ -589,8 +623,12 @@ begin
     // Compute series results
     seriesResults := ComputeResults(gameResults);
 
-    // Display series results
+    // Display series results table
     DisplaySeriesResults(seriesResults);
+
+    OutLn('');
+    OutLn(Format('Transcript is available in file %s', [C_FILENAME_OUT]));
+    OutLn('');
 
     // Flush the output file buffer
     // Without this call, the output file is sometimes incomplete (???)

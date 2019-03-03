@@ -113,6 +113,12 @@ type
     TGameResults = record
         // A copy of the source game board.
         board: TBoard;
+
+        // The maximum number of checks on a circle on the board.
+        maxChecks: integer;
+
+        // The average number of checks on a circle on the board.
+        avgChecks: real;
     end;
 
     {*
@@ -127,6 +133,18 @@ type
     TSeriesResults = record
         // Copies of the source game results.
         games: array of TGameResults;
+
+        // The total number of circles over all games.
+        totalCircles: integer;
+
+        // The total number of arrows over all games.
+        totalArrows: integer;
+
+        // The maximum number of checks on a circle on any game's board.
+        overallMaxChecks: integer;
+
+        // The average number of checks on a circle on any game's board.
+        overallAvgChecks: real;
     end;
 
     {*
@@ -420,8 +438,10 @@ var
     tempNumArrows: integer;
 
 begin
-    // Copy the board through
+    // Init results
     results.board := board;
+    results.maxChecks := 0;
+    results.avgChecks := 0;
 
     OutLn('Gameplay is about to begin.');
 
@@ -439,6 +459,12 @@ begin
         // Check the maximum mark limit
         if board.marks > C_MAXIMUM_MARKS then
             raise EMaximumMarksException.create(Format('Maximum number of marks reached (%d)', [C_MAXIMUM_MARKS]));
+
+        // Update max check statistics
+        if board.circles[currentCircle - 1].marks > results.maxChecks then
+        begin
+            results.maxChecks := board.circles[currentCircle - 1].marks;
+        end;
 
         // If current circle's count just hit one
         // This would indicate reaching the circle for the first time
@@ -469,6 +495,9 @@ begin
         currentCircle := board.circles[currentCircle - 1].arrows[Random(tempNumArrows)];
     end;
 
+    // Compute average for board
+    results.avgChecks := board.marks / board.numCircles;
+
     // Return game results
     PlayGame := results;
 end;
@@ -482,16 +511,42 @@ var
     // The series results.
     results: TSeriesResults;
 
+    // A temporary running total of checks over all games.
+    tempTotalChecks: integer;
+
     // An iterator index.
     i: integer;
 
 begin
-    // Copy game results through
+    tempTotalChecks := 0;
+
+    // Init results
     SetLength(results.games, Length(games));
+    results.totalCircles := 0;
+    results.totalArrows := 0;
+    results.overallMaxChecks := 0;
+
     for i := 1 to Length(games) do
     begin
+        // Keep running total of checkmarks
+        tempTotalChecks := tempTotalChecks + results.games[i - 1].board.marks;
+
+        // Copy game results through
         results.games[i - 1] := games[i - 1];
+
+        // Sum circles and arrows
+        results.totalCircles := results.totalCircles + games[i - 1].board.numCircles;
+        results.totalArrows := results.totalArrows + games[i - 1].board.numArrows;
+
+        // Update overall max checks statistic
+        if games[i - 1].maxChecks > results.overallMaxChecks then
+        begin
+            results.overallMaxChecks := games[i - 1].maxChecks;
+        end;
     end;
+
+    // Compute overall average
+    results.overallAvgChecks := tempTotalChecks / results.totalCircles;
 
     // Return series results
     ComputeResults := results;
@@ -506,15 +561,20 @@ begin
     OutLn(Format('Tabulating results for %d games...', [Length(results.games)]));
 
     // Table header
-    OutLn('+--------+----+----+----------------------------------------+');
-    OutLn('| Game # | N  | K  |                                        |');
-    OutLn('+--------+----+----+----------------------------------------+');
+    OutLn('+--------+----+----+-------------+-------------+');
+    OutLn('| Game # |  N |  K | Max. Checks | Avg. Checks |');
+    OutLn('+--------+----+----+-------------+-------------+');
 
+    // Table rows (one per game)
     for i := 1 to C_NUM_GAMES do
     begin
-        OutLn(Format('| %6d | %2d | %2d |                                        |', [i, results.games[i - 1].board.numCircles, results.games[i - 1].board.numArrows]));
-        OutLn('+--------+----+----+----------------------------------------+');
+        OutLn(Format('| %6d | %2d | %2d | %11d | %11f |', [i, results.games[i - 1].board.numCircles, results.games[i - 1].board.numArrows, results.games[i - 1].maxChecks, results.games[i - 1].avgChecks]));
+        OutLn('+--------+----+----+-------------+-------------+');
     end;
+
+    // Total row
+    OutLn(Format('| TOTALS | %2d | %2d | %11d | %11f |', [results.totalCircles, results.totalArrows, results.overallMaxChecks, results.overallAvgChecks]));
+    OutLn('+--------+----+----+-------------+-------------+');
 end;
 
 var

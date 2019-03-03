@@ -3,7 +3,7 @@
  * March 4, 2019
  * CS 4500-001 :: Intro to Software Profession
  *
- * FOREWORD: For my HW2 submission, I reused much code from my HW1 submission.
+ * FOREWORD: For my HW2 submission, I reused most code from my HW1 submission.
  * However, for my HW3 submission, I have decided to rewrite the program in an
  * attempt to apply what I have learned about Free Pascal since. In particular,
  * I tried to improve my encapsulation habits, preferring functions and records
@@ -271,11 +271,11 @@ begin
                 if (tempArrowIdxDst < 1) or (tempArrowIdxDst > board.numCircles) then
                     raise EInputFileException.create(Format('Destination index for arrow %d is out of range: %d', [tempArrowNum, tempArrowIdxDst]));
 
-                { Establish the arrow connection in memory. This increments the length
-                of the source circle's arrow array and appends to it a pointer to
-                the destination circle. }
-                //SetLength(AllCircles[ArrowSrc - 1].Arrows, Length(AllCircles[ArrowSrc - 1].Arrows) + 1);
-                //AllCircles[ArrowSrc - 1].Arrows[High(AllCircles[ArrowSrc - 1].Arrows)] := @AllCircles[ArrowDest - 1];
+                { Establish the arrow connection in memory. This increments the
+                  length of the source circle's arrow array and appends to it
+                  the index of the destination circle. }
+                SetLength(board.circles[tempArrowIdxSrc - 1].arrows, Length(board.circles[tempArrowIdxSrc - 1].arrows) + 1);
+                board.circles[tempArrowIdxSrc - 1].arrows[High(board.circles[tempArrowIdxSrc - 1].arrows)] := tempArrowIdxDst;
             end;
         except
             // Rethrow miscellaneous I/O errors under catch-all exception
@@ -294,6 +294,98 @@ begin
     LoadBoardFile := board;
 end;
 
+{*
+ * Determine whether a board is strongly-connected.
+ *}
+function IsBoardStrong(constref board: TBoard): boolean;
+var
+    // The index of the first circle in the current pair.
+    a: integer;
+
+    // The index of the second circle in the current pair.
+    b: integer;
+
+    // The set of discovered circles yet to be explored.
+    openSet: array of integer;
+
+    // A temporary circle index.
+    tempCircle: integer;
+
+    // An iterator index.
+    i: integer;
+
+label
+    // A label to which jumping scans the next circle.
+    nextCircle;
+
+begin
+    // Choose pairs of circles
+    for a := 1 to board.numCircles do
+        for b := 1 to board.numCircles do
+        begin
+            // Get initialized for the search
+            SetLength(openSet, 0);
+            tempCircle := 0;
+
+//          OutLn(Format('-> Looking for a path from circle %d to circle %d', [b, a]));
+
+            // Ignore trivial cases where both circles are the same
+            if a = b then
+                continue;
+
+            // Add circle B to the open set
+            SetLength(openSet, Length(openSet) + 1);
+            openSet[High(openSet)] := b;
+
+            { Try to find a path from circle B back to circle A. If we cannot, then
+              the system is not strongly-connected. }
+            while true do
+            begin
+                { Scan the open set for circle A. If we find circle A in the
+                  open set, then we have discovered a path from circle B to
+                  circle A. }
+                for i := 1 to Length(openSet) do
+                begin
+                    if openSet[i - 1] = a then
+                    begin
+//                      OutLn(Format('  -> Found with %d nonterminal(s) remaining', [Length(openSet)]));
+                        goto nextCircle;
+                    end;
+                end;
+
+                { We bail out quickly when we discover paths. So, it follows
+                  that if, at any point, the open set is empty, then there is no
+                  connection (and the system is not strongly-connected). }
+                if Length(openSet) = 0 then
+                begin
+//                  OutLn('  -> NOT FOUND');
+//                  OutLn('');
+//                  OutLn(Format('FAIL: No path from circle %d to circle %d!', [b, a]));
+//                  OutLn('The configured graph is not strongly-connected! Bailing out...');
+                    IsBoardStrong := false;
+                    Exit;
+                end;
+
+                // Pop the next circle from the array
+                tempCircle := openSet[Low(openSet)];
+                for i := 1 to Length(openSet) - 1 do
+                    openSet[i - 1] := openSet[i];
+                SetLength(openSet, Length(openSet) - 1);
+
+                // Add all newly-reachable circles to open set
+                for i := 1 to Length(board.circles[tempCircle - 1].arrows) do
+                begin
+                    SetLength(openSet, Length(openSet) + 1);
+                    openSet[High(openSet)] := board.circles[tempCircle - 1].arrows[i - 1];
+                end;
+            end;
+        nextCircle:
+        end;
+
+    OutLn('This board is a strongly-connected digraph.');
+    IsBoardStrong := true;
+end;
+
 // Play a single game on the given board
 function PlayGame(board: TBoard): TGameResults;
 var    
@@ -302,9 +394,6 @@ var
 
 begin
     OutLn('Placeholder for gameplay');
-    OutLn(Format('board.filename = %s', [board.filename]));
-    OutLn(Format('board.numCircles = %d', [board.numCircles]));
-    OutLn(Format('board.numArrows = %d', [board.numArrows]));
 
     // Return game results
     PlayGame := results;
@@ -355,6 +444,12 @@ begin
         end;
     end;
 
+    Randomize();
+
+    OutLn(Format('Configured for %d games.', [C_NUM_GAMES]));
+    OutLn('You will now be prompted to supply board files (relative).');
+    OutLn('');
+
     // Run through games
     SetLength(gameResults, C_NUM_GAMES);
     i := 1;
@@ -373,7 +468,7 @@ begin
         except
             on E: Exception do
             begin
-                OutLn('There was a problem loading the board.');
+                OutLn('FAIL: There was a problem loading the board.');
                 OutLn(Format('Error: %s', [E.Message]));
                 OutLn('');
 
@@ -381,6 +476,20 @@ begin
                 Continue;
             end;
         end;
+
+        // Check the board for strong connectedness
+        if IsBoardStrong(tempBoard) then
+            begin
+                    OutLn('The board was loaded successfully!');
+            end
+        else
+            begin
+                OutLn('FAIL: The board is not strongly-connected.');
+                OutLn('');
+
+                // Reprompt this game
+                Continue;
+            end;
 
         // Play the game on this board and keep the results
         gameResults[i] := PlayGame(tempBoard);

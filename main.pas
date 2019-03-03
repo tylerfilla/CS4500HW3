@@ -123,6 +123,14 @@ type
         // pass
     end;
 
+    {*
+     * An exception for input file errors.
+     *
+     * This is a catch-all exception thrown by the input file parser procedure
+     * when something doesn't go its way. Its message contains more details.
+     *}
+    EInputFileException = class(Exception);
+
 var
     // The output file.
     outputFile: TextFile;
@@ -157,8 +165,130 @@ var
     // The loaded board.
     board: TBoard;
 
+    // The board file.
+    boardFile: TextFile;
+
+    // A regular expression to extract arrow details.
+    arrowRegExpr: TRegExpr;
+
+    // A temporary arrow definition line.
+    tempArrowLine: string;
+
+    // A temporary arrow number.
+    tempArrowNum: integer;
+
+    // A temporary arrow destination index.
+    tempArrowIdxDst: integer;
+
+    // A temporary arrow source index.
+    tempArrowIdxSrc: integer;
+
 begin
     board.filename := filename;
+
+    // The input file
+    AssignFile(boardFile, filename);
+
+    // Create the regular expression for pulling out arrow details
+    arrowRegExpr := TRegExpr.Create;
+    arrowRegExpr.Expression := '\d+';
+
+    try
+        try
+            // Open the board file for read
+            Reset(boardFile);
+
+            // Try to read variable N (number of circles)
+            if Eof(boardFile) then
+                raise EInputFileException.create('Failed to read N: Premature EOF');
+            try
+                ReadLn(boardFile, board.numCircles);
+            except
+                on E: Exception do
+                    raise EInputFileException.create(Format('Failed to read N: %s: %s', [E.ClassName, E.Message]));
+            end;
+
+            // Check range of N (from 2 to 20)
+            if (board.numCircles < 2) or (board.numCircles > 20) then
+                raise EInputFileException.create(Format('N is out of range: %d', [board.numCircles]));
+
+            // Allocate N circles
+            SetLength(board.circles, board.numCircles);
+
+            // Try to read variable K (number of arrows)
+            if Eof(boardFile) then
+                raise EInputFileException.create('Failed to read K: Premature EOF');
+            try
+                ReadLn(boardFile, board.numArrows);
+            except
+                on E: Exception do
+                    raise EInputFileException.create(Format('Failed to read K: %s: %s', [E.ClassName, E.Message]));
+            end;
+
+            // Check range of K (from 2 to 100)
+            if (board.numArrows < 2) or (board.numArrows > 100) then
+                raise EInputFileException.create(Format('K is out of range: %d', [board.numArrows]));
+
+            // Read in K arrow definitions
+            for tempArrowNum := 1 to board.numArrows do
+            begin
+                // Try to read arrow line
+                if Eof(boardFile) then
+                    raise EInputFileException.create(Format('Failed to read arrow %d: Premature EOF', [tempArrowNum]));
+                try
+                    ReadLn(boardFile, tempArrowLine);
+                except
+                    on E: Exception do
+                        raise EInputFileException.create(Format('Failed to read arrow %d: %s: %s', [tempArrowNum, E.ClassName, E.Message]));
+                end;
+
+                // Pull source and destination indices from line
+                if arrowRegExpr.Exec(tempArrowLine) then
+                begin
+                    // Pull source index
+                    try
+                        tempArrowIdxSrc := arrowRegExpr.Match[0].ToInteger;
+                    except
+                        on E: Exception do
+                            raise EInputFileException.create(Format('Failed to read arrow %d source: %s: %s', [tempArrowNum, E.ClassName, E.Message]));
+                    end;
+
+                    // Pull destination index
+                    arrowRegExpr.ExecNext;
+                    try
+                        tempArrowIdxDst := arrowRegExpr.Match[0].ToInteger;
+                    except
+                        on E: Exception do
+                            raise EInputFileException.create(Format('Failed to read arrow %d destination: %s: %s', [tempArrowNum, E.ClassName, E.Message]));
+                    end;
+                end;
+
+                // Check range of arrow source index (from 1 to N)
+                if (tempArrowIdxSrc < 1) or (tempArrowIdxSrc > board.numCircles) then
+                    raise EInputFileException.create(Format('Source index for arrow %d is out of range: %d', [tempArrowNum, tempArrowIdxSrc]));
+
+                // Check range of arrow destination index (from 1 to N)
+                if (tempArrowIdxDst < 1) or (tempArrowIdxDst > board.numCircles) then
+                    raise EInputFileException.create(Format('Destination index for arrow %d is out of range: %d', [tempArrowNum, tempArrowIdxDst]));
+
+                { Establish the arrow connection in memory. This increments the length
+                of the source circle's arrow array and appends to it a pointer to
+                the destination circle. }
+                //SetLength(AllCircles[ArrowSrc - 1].Arrows, Length(AllCircles[ArrowSrc - 1].Arrows) + 1);
+                //AllCircles[ArrowSrc - 1].Arrows[High(AllCircles[ArrowSrc - 1].Arrows)] := @AllCircles[ArrowDest - 1];
+            end;
+        except
+            // Rethrow miscellaneous I/O errors under catch-all exception
+            on E: EInOutError do
+                raise EInputFileException.create(Format('Failed to read input file: %s: %s ', [E.ClassName, E.Message]));
+        end;
+    finally
+        // Close the input file
+        CloseFile(boardFile);
+
+        // Free arrow regular expression
+        arrowRegExpr.Free;
+    end;
 
     // Return loaded board
     LoadBoardFile := board;
@@ -171,6 +301,11 @@ var
     results: TGameResults;
 
 begin
+    OutLn('Placeholder for gameplay');
+    OutLn(Format('board.filename = %s', [board.filename]));
+    OutLn(Format('board.numCircles = %d', [board.numCircles]));
+    OutLn(Format('board.numArrows = %d', [board.numArrows]));
+
     // Return game results
     PlayGame := results;
 end;
@@ -229,7 +364,8 @@ begin
         OutLn(Format('Game #%d', [i]));
         Out('Input board file: ');
         ReadLn(tempFilename);
-        OutLn(Format('Loading file: %s', [tempFilename]));
+
+        OutLn('');
 
         // Try to load the board file
         try
@@ -237,7 +373,8 @@ begin
         except
             on E: Exception do
             begin
-                OutLn('There was a problem with the board.');
+                OutLn('There was a problem loading the board.');
+                OutLn(Format('Error: %s', [E.Message]));
                 OutLn('');
 
                 // Reprompt this game

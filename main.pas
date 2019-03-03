@@ -528,6 +528,7 @@ begin
         Out('Input board file: ');
         ReadLn(tempFilename);
 
+        OutLn(Format('Loading board file %s...', [tempFilename]));
         OutLn('');
 
         // Try to load the board file
@@ -591,8 +592,12 @@ begin
     // Display series results
     DisplaySeriesResults(seriesResults);
 
+    // Flush the output file buffer
+    // Without this call, the output file is sometimes incomplete (???)
+    Flush(outputFile);
+
     // For platforms with non-persistent consoles (like Windows)
-    // This keeps the console window open for grading
+    // This keeps the console window open for grading purposes on such platforms
     WriteLn('Press enter to continue...');
     ReadLn();
 end.

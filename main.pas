@@ -3,12 +3,14 @@
  * March 4, 2019
  * CS 4500-001 :: Intro to Software Profession
  *
- * FOREWORD: For my HW2 submission, I reused most code from my HW1 submission.
- * However, for my HW3 submission, I have decided to rewrite the program in an
- * attempt to apply what I have learned about Free Pascal since. In particular,
- * I tried to improve my encapsulation habits, preferring functions and records
- * to procedures and global state, respectively, and I tried to prefer
- * immutability where possible (e.g. using const references or pass-by-value).
+ * [ FOREWORD ]
+ *
+ * For my HW2 submission, I reused most code from my HW1 submission. However,
+ * for my HW3 submission, I have decided to rewrite the program in an attempt to
+ * apply what I have learned about Free Pascal since. In particular, I tried to
+ * improve my encapsulation habits, preferring functions and records to
+ * procedures and global state, respectively, and I tried to prefer immutability
+ * where possible (e.g. using const references or pass-by-value).
  *
  * [ DESCRIPTION ]
  *
@@ -93,6 +95,9 @@ type
 
         // The circles on the board.
         circles: array of TCircle;
+
+        // The total number of checkmarks placed on the board.
+        marks: integer;
     end;
 
     {*
@@ -130,6 +135,11 @@ type
      * when something doesn't go its way. Its message contains more details.
      *}
     EInputFileException = class(Exception);
+
+    {*
+     * An exception for when the maximum mark limit is reached.
+     *}
+    EMaximumMarksException = class(Exception);
 
 var
     // The output file.
@@ -185,6 +195,7 @@ var
 
 begin
     board.filename := filename;
+    board.marks := 0;
 
     // The input file
     AssignFile(boardFile, filename);
@@ -296,6 +307,10 @@ end;
 
 {*
  * Determine whether a board is strongly-connected.
+ *
+ * Verification is performed with an exhaustive search from the perspective of
+ * each circle. For each pair of circles, the graph is searched for a path that
+ * connects the two circles in the pair.
  *}
 function IsBoardStrong(constref board: TBoard): boolean;
 var
@@ -360,7 +375,7 @@ begin
                 begin
 //                  OutLn('  -> NOT FOUND');
 //                  OutLn('');
-//                  OutLn(Format('FAIL: No path from circle %d to circle %d!', [b, a]));
+//                  OutLn(Format('No path from circle %d to circle %d!', [b, a]));
 //                  OutLn('The configured graph is not strongly-connected! Bailing out...');
                     IsBoardStrong := false;
                     Exit;
@@ -392,8 +407,61 @@ var
     // The game results.
     results: TGameResults;
 
+    // The index of the current circle.
+    currentCircle: integer;
+
+    // The number of unique circles marked.
+    numUniqueCirclesMarked: integer;
+
+    // A temporary count of arrows.
+    tempNumArrows: integer;
+
 begin
-    OutLn('Placeholder for gameplay');
+    OutLn('Gameplay is about to begin.');
+
+    // Start at first circle
+    currentCircle := 1;
+    numUniqueCirclesMarked := 0;
+
+    // Core gameplay loop
+    while numUniqueCirclesMarked < board.numCircles do
+    begin
+        // Mark the current circle
+        Inc(board.circles[currentCircle - 1].marks);
+        Inc(board.marks);
+
+        // Check the maximum mark limit
+        if board.marks > C_MAXIMUM_MARKS then
+            raise EMaximumMarksException.create(Format('Maximum number of marks reached (%d)', [C_MAXIMUM_MARKS]));
+
+        // If current circle's count just hit one
+        // This would indicate reaching the circle for the first time
+        if board.circles[currentCircle - 1].marks = 1 then
+        begin
+            // Increment the corresponding counter
+            Inc(numUniqueCirclesMarked);
+
+            OutLn(Format(' -> Reached %d unique circles out of %d', [numUniqueCirclesMarked, board.numCircles]));
+        end;
+
+        // Count the number of arrows pointing *away* from the current circle
+        tempNumArrows := Length(board.circles[currentCircle - 1].arrows);
+
+        // If no arrows are available, panic
+        // This indicates a bug in the board verifier function
+        if tempNumArrows = 0 then
+        begin
+            OutLn('INTERNAL FAILURE (THIS IS A BUG)');
+            OutLn('The strong connection verifier cleared a non-strongly-connected digraph!');
+            CloseFile(outputFile);
+            Halt;
+        end;
+
+        // Move to a randomly-chosen circle pointed to by the current circle
+        // The "arrows" array on the current circle contains indices of target circles
+        // The act of "moving" is simply that of assigning the index to "currentCircle"
+        currentCircle := board.circles[currentCircle - 1].arrows[Random(tempNumArrows)];
+    end;
 
     // Return game results
     PlayGame := results;
@@ -456,7 +524,7 @@ begin
     while i <= C_NUM_GAMES do
     begin
         // Prompt for board file
-        OutLn(Format('Game #%d', [i]));
+        OutLn(Format('Game #%d setup', [i]));
         Out('Input board file: ');
         ReadLn(tempFilename);
 
@@ -468,33 +536,52 @@ begin
         except
             on E: Exception do
             begin
-                OutLn('FAIL: There was a problem loading the board.');
+                OutLn('There was a problem loading the board.');
                 OutLn(Format('Error: %s', [E.Message]));
                 OutLn('');
 
                 // Reprompt this game
-                Continue;
+                Out('(again) ');
+                continue;
             end;
         end;
 
         // Check the board for strong connectedness
         if IsBoardStrong(tempBoard) then
             begin
-                    OutLn('The board was loaded successfully!');
+                OutLn('The board was loaded successfully!');
             end
         else
             begin
-                OutLn('FAIL: The board is not strongly-connected.');
+                OutLn('The board is not strongly-connected.');
                 OutLn('');
 
                 // Reprompt this game
-                Continue;
+                Out('(again) ');
+                continue;
             end;
 
-        // Play the game on this board and keep the results
-        gameResults[i] := PlayGame(tempBoard);
-
         OutLn('');
+
+        // Try to play the game on this board and keep the results
+        try
+            gameResults[i - 1] := PlayGame(tempBoard);
+        except
+            on E: Exception do
+            begin
+                OutLn('The gameplay encountered a problem.');
+                OutLn(Format('Error: %s', [E.Message]));
+                OutLn('');
+
+                // Reprompt this game
+                Out('(again) ');
+                continue;
+            end;
+        end;
+
+        OutLn('Gameplay successful! Results have been stored.');
+        OutLn('');
+
         i := i + 1;
     end;
 
@@ -503,4 +590,9 @@ begin
 
     // Display series results
     DisplaySeriesResults(seriesResults);
+
+    // For platforms with non-persistent consoles (like Windows)
+    // This keeps the console window open for grading
+    WriteLn('Press enter to continue...');
+    ReadLn();
 end.

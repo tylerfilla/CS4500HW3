@@ -82,7 +82,7 @@ type
      * the game is played, the board state mutates.
      *}
     TBoard = record
-        // The name of the source file from which the board was parsed.
+        // The name of the source file from which the board was loaded.
         filename: string;
 
         // The number of circles on the board.
@@ -151,17 +151,17 @@ begin
     WriteLn(outputFile, text);
 end;
 
-// Read a file and parse it for a game board
-function ParseBoardFile(constref filename: string): TBoard;
+// Read a file and load it for a game board
+function LoadBoardFile(constref filename: string): TBoard;
 var
-    // The parsed board.
+    // The loaded board.
     board: TBoard;
 
 begin
     board.filename := filename;
 
-    // Return parsed board
-    ParseBoardFile := board;
+    // Return loaded board
+    LoadBoardFile := board;
 end;
 
 // Play a single game on the given board
@@ -204,9 +204,6 @@ var
     // A temporary game board.
     tempBoard: TBoard;
 
-    // A temporary game result.
-    tempResults: TGameResults;
-
     // An iterator index.
     i: integer;
 
@@ -223,29 +220,36 @@ begin
         end;
     end;
 
-    for i := 1 to C_NUM_GAMES do
+    // Run through games
+    SetLength(gameResults, C_NUM_GAMES);
+    i := 1;
+    while i <= C_NUM_GAMES do
     begin
+        // Prompt for board file
         OutLn(Format('Game #%d', [i]));
         Out('Input board file: ');
         ReadLn(tempFilename);
         OutLn(Format('Loading file: %s', [tempFilename]));
 
-        // Parse the board file
+        // Try to load the board file
         try
-            tempBoard := ParseBoardFile(tempFilename);
+            tempBoard := LoadBoardFile(tempFilename);
         except
             on E: Exception do
-                OutLn('Failed to parse board'); // TODO: Add better description of failure
+            begin
+                OutLn('There was a problem with the board.');
+                OutLn('');
+
+                // Reprompt this game
+                Continue;
+            end;
         end;
 
-        // Play the game on this board
-        tempResults := PlayGame(tempBoard);
-
-        // Store the gameplay results for later computation
-        SetLength(gameResults, Length(gameResults) + 1);
-        gameResults[High(gameResults)] := tempResults;
+        // Play the game on this board and keep the results
+        gameResults[i] := PlayGame(tempBoard);
 
         OutLn('');
+        i := i + 1;
     end;
 
     // Compute series results

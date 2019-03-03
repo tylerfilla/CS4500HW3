@@ -40,6 +40,27 @@
 
 program HW3;
 
+{$I+}
+{$mode objfpc}
+
+uses sysutils, regexpr;
+
+const
+    {*
+     * The number of games to play.
+     *}
+    C_NUM_GAMES = 3;
+
+    {*
+     * The name of the output file.
+     *}
+    C_FILENAME_OUT = 'HW3fillaOutfile.txt';
+
+    {*
+     * The maximum number of marks to distribute in a game.
+     *}
+    C_MAXIMUM_MARKS = 1000000;
+
 type
     {*
      * A circle.
@@ -102,11 +123,40 @@ type
         // pass
     end;
 
+var
+    // The output file.
+    outputFile: TextFile;
+
+{*
+ * Output the given string to the terminal and the output file.
+ *}
+procedure Out(constref text: string);
+begin
+    // To the screen
+    Write(Output, text);
+
+    // To the output file
+    Write(outputFile, text);
+end;
+
+{*
+ * Output the given string on a new line to the terminal and the output file.
+ *}
+procedure OutLn(constref text: string);
+begin
+    // To the screen
+    WriteLn(Output, text);
+
+    // To the output file
+    WriteLn(outputFile, text);
+end;
+
 // Read a file and parse it for a game board
 function ParseBoardFile(constref filename: string): TBoard;
 var
     // The parsed board.
-    board: TBoard = ();
+    board: TBoard;
+
 begin
     board.filename := filename;
 
@@ -116,10 +166,10 @@ end;
 
 // Play a single game on the given board
 function PlayGame(board: TBoard): TGameResults;
-var
-    
+var    
     // The game results.
-    results: TGameResults = ();
+    results: TGameResults;
+
 begin
     // Return game results
     PlayGame := results;
@@ -129,16 +179,78 @@ end;
 function ComputeResults(constref games: array of TGameResults): TSeriesResults;
 var
     // The series results.
-    results: TSeriesResults = ();
+    results: TSeriesResults;
+
 begin
     // Return series results
     ComputeResults := results;
 end;
 
+procedure DisplaySeriesResults(constref results: TSeriesResults);
+begin
+    WriteLn('Placeholder for series results');
+end;
+
 var
-    // The series results.
-    results: array of TGameResults;
+    // Array of results for each played game.
+    gameResults: array of TGameResults;
+
+    // Results over all played games.
+    seriesResults: TSeriesResults;
+
+    // A temporary filename.
+    tempFilename: string;
+
+    // A temporary game board.
+    tempBoard: TBoard;
+
+    // A temporary game result.
+    tempResults: TGameResults;
+
+    // An iterator index.
+    i: integer;
 
 begin
-    WriteLn(ParseBoardFile('abcdef.txt').filename);
+    // Open the output file for write access
+    try
+        AssignFile(outputFile, C_FILENAME_OUT);
+        Rewrite(OutputFile);
+    except
+        on E: Exception do
+        begin
+            WriteLn(Format('Failed to open output file for write: %s', [E.Message]));
+            Exit;
+        end;
+    end;
+
+    for i := 1 to C_NUM_GAMES do
+    begin
+        OutLn(Format('Game #%d', [i]));
+        Out('Input board file: ');
+        ReadLn(tempFilename);
+        OutLn(Format('Loading file: %s', [tempFilename]));
+
+        // Parse the board file
+        try
+            tempBoard := ParseBoardFile(tempFilename);
+        except
+            on E: Exception do
+                OutLn('Failed to parse board'); // TODO: Add better description of failure
+        end;
+
+        // Play the game on this board
+        tempResults := PlayGame(tempBoard);
+
+        // Store the gameplay results for later computation
+        SetLength(gameResults, Length(gameResults) + 1);
+        gameResults[High(gameResults)] := tempResults;
+
+        OutLn('');
+    end;
+
+    // Compute series results
+    seriesResults := ComputeResults(gameResults);
+
+    // Display series results
+    DisplaySeriesResults(seriesResults);
 end.

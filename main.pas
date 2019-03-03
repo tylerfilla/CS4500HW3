@@ -439,7 +439,6 @@ var
 
 begin
     // Init results
-    results.board := board;
     results.maxChecks := 0;
     results.avgChecks := 0;
 
@@ -495,6 +494,9 @@ begin
         currentCircle := board.circles[currentCircle - 1].arrows[Random(tempNumArrows)];
     end;
 
+    // Copy updated board through
+    results.board := board;
+
     // Compute average for board
     results.avgChecks := board.marks / board.numCircles;
 
@@ -512,7 +514,7 @@ var
     results: TSeriesResults;
 
     // A temporary running total of checks over all games.
-    tempTotalChecks: integer;
+    tempTotalChecks: real;
 
     // An iterator index.
     i: integer;
@@ -525,11 +527,12 @@ begin
     results.totalCircles := 0;
     results.totalArrows := 0;
     results.overallMaxChecks := 0;
+    results.overallAvgChecks := 0;
 
     for i := 1 to Length(games) do
     begin
         // Keep running total of checkmarks
-        tempTotalChecks := tempTotalChecks + results.games[i - 1].board.marks;
+        tempTotalChecks := tempTotalChecks + games[i - 1].board.marks;
 
         // Copy game results through
         results.games[i - 1] := games[i - 1];
@@ -573,7 +576,7 @@ begin
     end;
 
     // Total row
-    OutLn(Format('| TOTALS | %2d | %2d | %11d | %11f |', [results.totalCircles, results.totalArrows, results.overallMaxChecks, results.overallAvgChecks]));
+    OutLn(Format('| SERIES | %2d | %2d | %11d | %11f |', [results.totalCircles, results.totalArrows, results.overallMaxChecks, results.overallAvgChecks]));
     OutLn('+--------+----+----+-------------+-------------+');
 end;
 
